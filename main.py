@@ -7,7 +7,6 @@ from panda3d.core import PandaNode,NodePath,Camera,TextNode
 from panda3d.core import Vec3,Vec4,BitMask32
 from direct.gui.OnscreenText import OnscreenText
 from direct.actor.Actor import Actor
-from direct.showbase.DirectObject import DirectObject
 from panda3d.ai import *
 from direct.task import Task
 import random, sys, os, math
@@ -30,18 +29,21 @@ class World(DirectObject):
         self.timeLeft = 100
         self.showIntroPage()
 
-        self.keyMap = {"left":0, "right":0, "forward":0, "cam-left":0, "cam-right":0}
+        self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, "cam-left":0, "cam-right":0}
+        self.musicDir = {"intro":"", "playing_game":"", "game_over":""}
         self.acceptOnce('f1', self.startGame)
         self.accept("escape", sys.exit)
         self.accept("arrow_left", self.setKey, ["cam-left",1])
         self.accept("arrow_right", self.setKey, ["cam-right",1])
         self.accept("w", self.setKey, ["forward",1])
         self.accept("a", self.setKey, ["left",1])
+        self.accept("s", self.setKey, ["backward", 1])
         self.accept("d", self.setKey, ["right",1])
         self.accept("arrow_left-up", self.setKey, ["cam-left",0])
         self.accept("arrow_right-up", self.setKey, ["cam-right",0])
         self.accept("w-up", self.setKey, ["forward",0])
         self.accept("a-up", self.setKey, ["left",0])
+        self.accept("s-up", self.setKey, ["backward", 0])
         self.accept("d-up", self.setKey, ["right",0])
 
     def showIntroPage(self):
@@ -49,7 +51,8 @@ class World(DirectObject):
         intro_text = """Controls\n
                         [ESC] : Quit\n
                         [Left/Right Arrow] : Rotate Camera\n
-                        [W] : Run Foward\n
+                        [Mouse] : Rotate Camera\n
+                        [W,S] : Run Foward & Backward\n
                         [A,D] : Rotate Player
                         """
         self.titleText = OnscreenText(text = "Timed-obstacle Course Game", pos = (0.,0.5), 
@@ -60,7 +63,6 @@ class World(DirectObject):
     def hideIntroPage(self):
         self.titleText.destroy()
         self.waitingText.destroy()
-
 
     def pauseGames(self):
         if self.gamePaused:
@@ -160,6 +162,13 @@ class World(DirectObject):
         if (self.keyMap["cam-right"]!=0):
             base.camera.setX(base.camera, +20 * globalClock.getDt())
 
+        # Track mouse movement and set the camera
+        md = base.win.getPointer(0)
+        x = md.getX()
+        y = md.getY()
+        if base.win.movePointer(0, base.win.getXSize()/2, base.win.getYSize()/2):
+            base.camera.setX(base.camera, (x - base.win.getXSize()/2)* globalClock.getDt())
+
         startpos = self.mainChar.getPos()
 
         if (self.keyMap["left"]!=0):
@@ -168,11 +177,13 @@ class World(DirectObject):
             self.mainChar.setH(self.mainChar.getH() - 300 * globalClock.getDt())
         if (self.keyMap["forward"]!=0):
             self.mainChar.setY(self.mainChar, -25 * globalClock.getDt())
+        if (self.keyMap["backward"]!=0):
+            self.mainChar.setY(self.mainChar, 25 * globalClock.getDt())
 
         # If mainChar is moving, loop the run animation.
         # If he is standing still, stop the animation.
 
-        if (self.keyMap["forward"]!=0) or (self.keyMap["left"]!=0) or (self.keyMap["right"]!=0):
+        if (self.keyMap["forward"]!=0) or (self.keyMap["backward"]!=0) or (self.keyMap["left"]!=0) or (self.keyMap["right"]!=0):
             if self.isMoving is False:
                 self.mainChar.loop("run")
                 self.isMoving = True
