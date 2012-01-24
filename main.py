@@ -1,5 +1,6 @@
 from direct.directbase.DirectStart import *
 from direct.showbase.DirectObject import DirectObject
+from direct.gui.DirectGui import *
 from panda3d.core import CollisionTraverser,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay
 from panda3d.core import Filename,AmbientLight,DirectionalLight
@@ -10,7 +11,6 @@ from direct.actor.Actor import Actor
 from panda3d.ai import *
 from direct.task import Task
 import random, sys, os, math
-
 
 def addInstructions(pos, msg):
     return OnscreenText(text=msg, style=1, fg=(1,1,1,1),
@@ -48,21 +48,33 @@ class World(DirectObject):
 
     def showIntroPage(self):
 
-        intro_text = """Controls\n
-                        [ESC] : Quit\n
-                        [Left/Right Arrow] : Rotate Camera\n
-                        [Mouse] : Rotate Camera\n
-                        [W,S] : Run Foward & Backward\n
-                        [A,D] : Rotate Player
-                        """
-        self.titleText = OnscreenText(text = "Timed-obstacle Course Game", pos = (0.,0.5), 
-        scale = 0.07,fg=(1,0.5,0.5,1),align=TextNode.ACenter,mayChange=1)
+        control_direction_texts = ["Controls", "~~~~~~~~~~~~~~~~~~",
+                        "[ESC] : Quit",
+                        "[Left/Right Arrow] : Rotate Camera",
+                        "[Mouse] : Rotate Camera",
+                        "[W,S] : Run Foward & Backward",
+                        "[A,D] : Rotate Player",]
+        self.title_txt = OnscreenText(text = "Timed-obstacle Course Game\nAssignment - 2 (P14)\nMichelle 91148", pos = (0.,0.5), scale = 0.07,fg=(1,0.5,0.5,1),align=TextNode.ACenter,mayChange=1)
         
-        self.waitingText = OnscreenText( intro_text, scale = 0.05, fg = (1,1,1,1), shadow=(.1,.1,.1,1))
+        # self.control_direction = OnscreenText( intro_text, scale = 0.05, fg = (1,1,1,1), shadow=(.1,.1,.1,1))
+        self.control_direction = []
+        pos = 0
+        for direction in control_direction_texts:
+            self.control_direction.append(OnscreenText(direction, scale = 0.05, fg=(1,1,1,1), shadow=(.1,.1,.1,.1), pos=(0,pos)))
+            pos -= .07
+        self.btn_play = DirectButton(text = ("PLAY","PLAY","PLAY","disabled"), scale=.1,command=self.startGame, pos=(0.,0.,-0.7))
 
     def hideIntroPage(self):
-        self.titleText.destroy()
-        self.waitingText.destroy()
+        self.title_txt.destroy()
+        for control in self.control_direction:
+            control.destroy()
+        self.btn_play.destroy()
+        
+    def showHUD(self):
+        self.timeleft_txt = OnscreenText(text = "Time Left: %s"%self.time_left,pos = (0.9, 0.9), scale = 0.05, fg=(1,1,1,1), align=TextNode.ACenter,mayChange=1)
+
+    def hideHUD(self):
+        self.timeleft_txt.destroy()
 
     def pauseGames(self):
         if self.gamePaused:
@@ -95,9 +107,14 @@ class World(DirectObject):
 
         # Create Actors
 
-
         # Add Lighting
         self.createLighting()
+
+        # Counters - Time Limit
+        self.total_time = 120 # 2 mins in seconds
+        self.time_left = 120 # 2 mins in seconds
+        self.showHUD()
+        taskMgr.add(self.updateHUD, "updateHUDTask")
 
 
     def setKey(self, key, value):
@@ -151,6 +168,12 @@ class World(DirectObject):
         render.setLight(render.attachNewNode(ambientLight))
         render.setLight(render.attachNewNode(directionalLight))
 
+    def updateHUD(self, task):
+        # print int(task.time)
+        self.time_left = self.total_time - int(task.time)
+        self.timeleft_txt.setText("Time Left: %s"%self.time_left)
+        return task.cont
+     
     def move(self, task):
 
         # If the camera-left key is pressed, move camera left.
