@@ -72,6 +72,7 @@ class World(DirectObject):
         
     def showHUD(self):
         self.timeleft_txt = OnscreenText(text = "Time Left: %s"%self.time_left,pos = (0.9, 0.9), scale = 0.05, fg=(1,1,1,1), align=TextNode.ACenter,mayChange=1)
+        self.health_txt = OnscreenText(text = "Health : %s"%self.health, pos=(-0.95, 0.9), scale = 0.05, fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
 
     def hideHUD(self):
         self.timeleft_txt.destroy()
@@ -95,8 +96,8 @@ class World(DirectObject):
         self.isMoving = False
 
         self.loadMainCharacter()
+        self.loadEndPoint()
 
-        taskMgr.add(self.move, "moveTask")
         base.disableMouse()
         base.camera.setPos(self.mainChar.getX(), self.mainChar.getY()+10,2)
 
@@ -113,8 +114,13 @@ class World(DirectObject):
         # Counters - Time Limit
         self.total_time = 120 # 2 mins in seconds
         self.time_left = 120 # 2 mins in seconds
+        self.health = 10
         self.showHUD()
+
+        # Task Manager to control the game
+        taskMgr.add(self.move, "moveTask")
         taskMgr.add(self.updateHUD, "updateHUDTask")
+        taskMgr.add(self.checkGameStage, "checkGameStageTask")
 
 
     def setKey(self, key, value):
@@ -133,6 +139,15 @@ class World(DirectObject):
         self.mainChar.reparentTo(render)
         self.mainChar.setScale(.2)
         self.mainChar.setPos(mainCharStartPos)
+
+    def loadEndPoint(self):
+        """
+            chosen end position = Point3(30.9069, 4.36755, 2.91223)
+        """
+        self.endPoint = Actor("models/ralph")
+        self.endPoint.reparentTo(render)
+        self.endPoint.setScale(.5)
+        self.endPoint.setPos(30.9069, 4.36755, 3.4)
 
     def addCollisionOnMainChar(self):
         self.mainCharGroundRay = CollisionRay()
@@ -168,8 +183,17 @@ class World(DirectObject):
         render.setLight(render.attachNewNode(ambientLight))
         render.setLight(render.attachNewNode(directionalLight))
 
+    def checkGameStage(self, task):
+        """
+            GUI with time taken and restart button when player reaches end point or reaches zero health.
+        """
+        # player reach end point
+        # player_endpoint_distance = self.mainChar.getDistance(self.endPoint)
+        # print player_endpoint_distance
+        print "player_endpoint_distance"
+        return task.cont
+
     def updateHUD(self, task):
-        # print int(task.time)
         self.time_left = self.total_time - int(task.time)
         self.timeleft_txt.setText("Time Left: %s"%self.time_left)
         return task.cont
