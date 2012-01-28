@@ -27,7 +27,7 @@ class World(DirectObject):
         self.gameStarted = 0
         self.gamePaused = 0
         self.timeLeft = 100
-        self.showIntroPage()
+        self.speed = 4
 
         self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, "cam-left":0, "cam-right":0}
         self.musicDir = {"intro":"", "playing_game":"", "game_over":""}
@@ -48,7 +48,7 @@ class World(DirectObject):
         
         # Songs
         self.loadSongs()
-        self.changeSongMode(self.start_song)
+        self.showIntroPage()
 
     def loadSongs(self):
         self.start_song = base.loader.loadSfx("./songs/start.mp3")
@@ -79,25 +79,34 @@ class World(DirectObject):
             self.control_direction.append(OnscreenText(direction, scale = 0.05, fg=(1,1,1,1), shadow=(.1,.1,.1,.1), pos=(0,pos)))
             pos -= .07
         self.btn_play = DirectButton(text = ("PLAY","PLAY","PLAY","disabled"), scale=.1,command=self.startGame, pos=(0.,0.,-0.7))
+        if not self.start_song.status() == self.start_song.PLAYING:
+            self.start_song.play()
+            self.start_song.setLoop(True)
 
     def hideIntroPage(self):
         self.title_txt.destroy()
         for control in self.control_direction:
             control.destroy()
         self.btn_play.destroy()
+        if self.start_song.status() == self.start_song.PLAYING:
+            self.start_song.stop()
         
     def showHUD(self):
         self.timeleft_txt = OnscreenText(text = "Time Left: %s"%self.time_left,pos = (0.9, 0.9), scale = 0.05, fg=(1,1,1,1), align=TextNode.ACenter,mayChange=1)
         self.health_txt = OnscreenText(text = "Health : %s"%self.health, pos=(-0.95, 0.9), scale = 0.05, fg=(1,1,1,1), align=TextNode.ACenter, mayChange=1)
+        if not self.play_song.status() == self.play_song.PLAYING:
+            self.play_song.play()
+            self.play_song.setLoop(True)
 
     def hideHUD(self):
         self.timeleft_txt.destroy()
         self.health_txt.destroy()
+        if self.play_song.status() == self.play_song.PLAYING:
+            self.play_song.stop()
 
     def showRestartPage(self):
         self.game_status_txt = OnscreenText(text = "Erh...", pos = (0.,0.5), scale = 0.07,fg=(1,1,1,1),align=TextNode.ACenter,mayChange=1)
         self.restart_btn = DirectButton(text = ("RESTART","RESTART","RESTART","disabled"), scale=.1, command=self.restartGame, pos=(0,0,-0.7))
-
 
     def pauseGame(self):
         if self.gamePaused:
@@ -109,8 +118,8 @@ class World(DirectObject):
     def startGame(self):
         self.gameStarted = 1
         self.hideIntroPage()
-        self.changeSongMode(self.start_song)
-        self.changeSongMode(self.play_song)
+        self.play_song.play()
+        self.play_song.setLoop(True)
         
         # Load Environment and Players
         self.loadEnv()
@@ -122,6 +131,7 @@ class World(DirectObject):
         self.loadMainCharacter()
         self.loadStartPoint()
         self.loadEndPoint()
+        self.loadObstacles()
 
         base.disableMouse()
         base.camera.setPos(self.mainChar.getX(), self.mainChar.getY()+10,2)
@@ -137,11 +147,11 @@ class World(DirectObject):
         self.createLighting()
 
         # Counters - Time Limit
-        self.total_time = 120 # 2 mins in seconds
-        self.time_left = 120 # 2 mins in seconds
-        # self.total_time = 5 # 2 mins in seconds
-        # self.time_left = 5 # 2 mins in seconds
-        self.health = 10
+        # self.total_time = 120 # 2 mins in seconds
+        # self.time_left = 120 # 2 mins in seconds
+        self.total_time = 5 # 2 mins in seconds
+        self.time_left = 5 # 2 mins in seconds
+        self.health = 100
         self.showHUD()
 
         # Task Manager to control the game
@@ -153,6 +163,15 @@ class World(DirectObject):
         self.game_status_txt.destroy()
         self.restart_btn.destroy()
         self.removeNodes()
+
+        # need to stop the winning or losing songs
+        if self.win_song.status() == self.win_song.PLAYING:
+            self.win_song.stop()
+            print "stop win song"
+        if self.gameover_song.status() == self.gameover_song.PLAYING:
+            self.gameover_song.stop()
+            print "stop gameover"
+
         self.startGame()
 
     def removeNodes(self):
@@ -215,6 +234,17 @@ class World(DirectObject):
         self.camGroundHandler = CollisionHandlerQueue()
         self.cTrav.addCollider(self.camGroundColNp, self.camGroundHandler)
 
+    def loadObstacles(self):
+        moving_count = 10
+        self.moving_obstacles = []
+        for count in range(moving_count):
+            actor = Actor("models/ralph-walk")
+            actor.reparentTo(render)
+            actor.setScale(.2)
+            actor.setPos(self.mainChar.getPos())
+            self.moving_obstacles.append(actor)
+
+
     def createLighting(self):
         ambientLight = AmbientLight("ambientLight")
         ambientLight.setColor(Vec4(.3, .3, .3, 1))
@@ -230,13 +260,16 @@ class World(DirectObject):
             GUI with time taken and restart button when player reaches end point or reaches zero health.
         """
         # player reach end point
+        print self.play_song.status()
         player_endpoint_distance = self.mainChar.getDistance(self.endPoint)
-        print player_endpoint_distance
         if player_endpoint_distance < 4:
             taskMgr.remove('updateHUDTask')
             taskMgr.remove('updateGameTask')
             self.hideHUD()
             self.showRestartPage()
+            self.changeSongMode(self.win_song)
+            if self.play_song.status() == self.play_song.PLAYING:
+                self.play_song.stop()
             self.game_status_txt.setText("You WIN!")
             return task.done
 
@@ -245,6 +278,9 @@ class World(DirectObject):
             taskMgr.remove('updateGameTask')
             self.hideHUD()
             self.showRestartPage()
+            self.changeSongMode(self.gameover_song)
+            if self.play_song.status() == self.play_song.PLAYING:
+                self.play_song.stop()
             self.game_status_txt.setText("Game Over")
             return task.done
         return task.cont
@@ -279,9 +315,9 @@ class World(DirectObject):
         if (self.keyMap["right"]!=0):
             self.mainChar.setH(self.mainChar.getH() - 300 * globalClock.getDt())
         if (self.keyMap["forward"]!=0):
-            self.mainChar.setY(self.mainChar, -25 * globalClock.getDt())
+            self.mainChar.setY(self.mainChar, -25 * globalClock.getDt() * self.speed)
         if (self.keyMap["backward"]!=0):
-            self.mainChar.setY(self.mainChar, 25 * globalClock.getDt())
+            self.mainChar.setY(self.mainChar, 25 * globalClock.getDt() * self.speed)
 
         # If mainChar is moving, loop the run animation.
         # If he is standing still, stop the animation.
