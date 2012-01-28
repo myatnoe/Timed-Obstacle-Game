@@ -45,9 +45,25 @@ class World(DirectObject):
         self.accept("a-up", self.setKey, ["left",0])
         self.accept("s-up", self.setKey, ["backward", 0])
         self.accept("d-up", self.setKey, ["right",0])
+        
+        # Songs
+        self.loadSongs()
+        self.changeSongMode(self.start_song)
+
+    def loadSongs(self):
+        self.start_song = base.loader.loadSfx("./songs/start.mp3")
+        self.play_song = base.loader.loadSfx("./songs/playing.mp3")
+        self.win_song = base.loader.loadSfx("./songs/win.mp3")
+        self.gameover_song = base.loader.loadSfx("./songs/gameover.mp3")
+
+    def changeSongMode(self, sound):
+        if sound.status() == sound.PLAYING:
+            sound.stop()
+        else:
+            sound.play()
+            sound.setLoop(True)
 
     def showIntroPage(self):
-
         control_direction_texts = ["Controls", "~~~~~~~~~~~~~~~~~~",
                         "[ESC] : Quit",
                         "[Left/Right Arrow] : Rotate Camera",
@@ -76,8 +92,14 @@ class World(DirectObject):
 
     def hideHUD(self):
         self.timeleft_txt.destroy()
+        self.health_txt.destroy()
 
-    def pauseGames(self):
+    def showRestartPage(self):
+        self.game_status_txt = OnscreenText(text = "Erh...", pos = (0.,0.5), scale = 0.07,fg=(1,1,1,1),align=TextNode.ACenter,mayChange=1)
+        self.restart_btn = DirectButton(text = ("RESTART","RESTART","RESTART","disabled"), scale=.1, command=self.restartGame, pos=(0,0,-0.7))
+
+
+    def pauseGame(self):
         if self.gamePaused:
             self.gamePaused = 0
         else:
@@ -87,6 +109,8 @@ class World(DirectObject):
     def startGame(self):
         self.gameStarted = 1
         self.hideIntroPage()
+        self.changeSongMode(self.start_song)
+        self.changeSongMode(self.play_song)
         
         # Load Environment and Players
         self.loadEnv()
@@ -96,6 +120,7 @@ class World(DirectObject):
         self.isMoving = False
 
         self.loadMainCharacter()
+        self.loadStartPoint()
         self.loadEndPoint()
 
         base.disableMouse()
@@ -114,14 +139,24 @@ class World(DirectObject):
         # Counters - Time Limit
         self.total_time = 120 # 2 mins in seconds
         self.time_left = 120 # 2 mins in seconds
+        # self.total_time = 5 # 2 mins in seconds
+        # self.time_left = 5 # 2 mins in seconds
         self.health = 10
         self.showHUD()
 
         # Task Manager to control the game
-        taskMgr.add(self.move, "moveTask")
+        taskMgr.add(self.updateGame, "updateGameTask")
         taskMgr.add(self.updateHUD, "updateHUDTask")
         taskMgr.add(self.checkGameStage, "checkGameStageTask")
 
+    def restartGame(self):
+        self.game_status_txt.destroy()
+        self.restart_btn.destroy()
+        self.removeNodes()
+        self.startGame()
+
+    def removeNodes(self):
+        self.mainChar.removeNode()
 
     def setKey(self, key, value):
         self.keyMap[key] = value
@@ -140,11 +175,18 @@ class World(DirectObject):
         self.mainChar.setScale(.2)
         self.mainChar.setPos(mainCharStartPos)
 
+    def loadStartPoint(self):
+        self.startPoint = Actor("models/frowney")
+        self.startPoint.reparentTo(render)
+        self.startPoint.setScale(.5)
+        self.startPoint.setPos(self.mainChar.getPos())
+        self.startPoint.setX(self.mainChar.getX() - .7)
+
     def loadEndPoint(self):
         """
             chosen end position = Point3(30.9069, 4.36755, 2.91223)
         """
-        self.endPoint = Actor("models/ralph")
+        self.endPoint = Actor("models/smiley")
         self.endPoint.reparentTo(render)
         self.endPoint.setScale(.5)
         self.endPoint.setPos(30.9069, 4.36755, 3.4)
@@ -188,9 +230,23 @@ class World(DirectObject):
             GUI with time taken and restart button when player reaches end point or reaches zero health.
         """
         # player reach end point
-        # player_endpoint_distance = self.mainChar.getDistance(self.endPoint)
-        # print player_endpoint_distance
-        print "player_endpoint_distance"
+        player_endpoint_distance = self.mainChar.getDistance(self.endPoint)
+        print player_endpoint_distance
+        if player_endpoint_distance < 4:
+            taskMgr.remove('updateHUDTask')
+            taskMgr.remove('updateGameTask')
+            self.hideHUD()
+            self.showRestartPage()
+            self.game_status_txt.setText("You WIN!")
+            return task.done
+
+        if (self.time_left == 0 or self.health == 0):
+            taskMgr.remove('updateHUDTask')
+            taskMgr.remove('updateGameTask')
+            self.hideHUD()
+            self.showRestartPage()
+            self.game_status_txt.setText("Game Over")
+            return task.done
         return task.cont
 
     def updateHUD(self, task):
@@ -198,7 +254,7 @@ class World(DirectObject):
         self.timeleft_txt.setText("Time Left: %s"%self.time_left)
         return task.cont
      
-    def move(self, task):
+    def updateGame(self, task):
 
         # If the camera-left key is pressed, move camera left.
         # If the camera-right key is pressed, move camera right.
