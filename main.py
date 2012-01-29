@@ -223,6 +223,7 @@ class World(DirectObject):
         self.mainCharGroundColNp = self.mainChar.attachNewNode(self.mainCharGroundCol)
         self.mainCharGroundHandler = CollisionHandlerQueue()
         self.cTrav.addCollider(self.mainCharGroundColNp, self.mainCharGroundHandler)
+        self.mainCharGroundColNp.show()
 
     def addCollisionOnCam(self):
         self.camGroundRay = CollisionRay()
