@@ -1,7 +1,7 @@
 from direct.directbase.DirectStart import *
 from direct.showbase.DirectObject import DirectObject
 from direct.gui.DirectGui import *
-from panda3d.core import CollisionTraverser,CollisionNode
+from panda3d.core import CollisionTraverser, CollisionHandlerPusher,CollisionNode
 from panda3d.core import CollisionHandlerQueue,CollisionRay
 from panda3d.core import Filename,AmbientLight,DirectionalLight
 from panda3d.core import PandaNode,NodePath,Camera,TextNode
@@ -120,6 +120,8 @@ class World(DirectObject):
         self.hideIntroPage()
         self.play_song.play()
         self.play_song.setLoop(True)
+        self.AIworld = AIWorld(render)
+        
         
         # Load Environment and Players
         self.loadEnv()
@@ -131,15 +133,16 @@ class World(DirectObject):
         self.loadMainCharacter()
         self.loadStartPoint()
         self.loadEndPoint()
-        self.loadObstacles()
 
         base.disableMouse()
         base.camera.setPos(self.mainChar.getX(), self.mainChar.getY()+10,2)
 
         #  Collision
         self.cTrav = CollisionTraverser()
+        self.pusher = CollisionHandlerPusher()
         self.addCollisionOnMainChar()
         self.addCollisionOnCam()
+        self.loadObstacles()
 
         # Create Actors
 
@@ -147,10 +150,10 @@ class World(DirectObject):
         self.createLighting()
 
         # Counters - Time Limit
-        # self.total_time = 120 # 2 mins in seconds
-        # self.time_left = 120 # 2 mins in seconds
-        self.total_time = 5 # 2 mins in seconds
-        self.time_left = 5 # 2 mins in seconds
+        self.total_time = 120 # 2 mins in seconds
+        self.time_left = 120 # 2 mins in seconds
+        # self.total_time = 5 # 2 mins in seconds
+        # self.time_left = 5 # 2 mins in seconds
         self.health = 100
         self.showHUD()
 
@@ -158,6 +161,7 @@ class World(DirectObject):
         taskMgr.add(self.updateGame, "updateGameTask")
         taskMgr.add(self.updateHUD, "updateHUDTask")
         taskMgr.add(self.checkGameStage, "checkGameStageTask")
+        taskMgr.add(self.AIUpdate, "AIUpdate")
 
     def restartGame(self):
         self.game_status_txt.destroy()
@@ -167,10 +171,8 @@ class World(DirectObject):
         # need to stop the winning or losing songs
         if self.win_song.status() == self.win_song.PLAYING:
             self.win_song.stop()
-            print "stop win song"
         if self.gameover_song.status() == self.gameover_song.PLAYING:
             self.gameover_song.stop()
-            print "stop gameover"
 
         self.startGame()
 
@@ -235,16 +237,82 @@ class World(DirectObject):
         self.cTrav.addCollider(self.camGroundColNp, self.camGroundHandler)
 
     def loadObstacles(self):
-        moving_count = 10
-        self.moving_obstacles = []
-        for count in range(moving_count):
-            actor = Actor("models/ralph-walk")
-            actor.reparentTo(render)
-            actor.setScale(.2)
-            actor.setPos(self.mainChar.getPos())
-            self.moving_obstacles.append(actor)
+        startPos = self.startPoint.getPos()
+        
+        #Load the panda actor, and loop its animation
+        self.panda = Actor("models/panda-model",{"walk":"models/panda-walk4"})
+        self.panda.setScale(0.0009,0.0009,0.0009)
+        self.panda.setPlayRate(5, 'walk')
+        self.panda.reparentTo(render)
+        self.panda.loop("walk")
+        self.panda.setPos(startPos[0],startPos[1]-5,startPos[2])
+        self.panda.setH(self.panda.getH() + 3)
+        # self.panda.setPos(startPos)
+        # self.panda.setPos(startPos[0], startPos[1], startPos[2])
+        
+        self.pandaGroundRay = CollisionRay()
+        self.pandaGroundRay.setOrigin(0,0,1000)
+        self.pandaGroundRay.setDirection(0,0,-1)
+        self.pandaGroundCol = CollisionNode('pandaRay')
+        self.pandaGroundCol.addSolid(self.pandaGroundRay)
+        self.pandaGroundCol.setFromCollideMask(BitMask32.bit(0))
+        self.pandaGroundCol.setIntoCollideMask(BitMask32.allOff())
+        self.pandaGroundColNp = self.panda.attachNewNode(self.pandaGroundCol)
+        self.pandaGroundHandler = CollisionHandlerQueue()
+        self.cTrav.addCollider(self.pandaGroundColNp, self.pandaGroundHandler)
 
+        # AI code for panda goes here
+        # AICharacter (string model_name, NodePath model_np, double mass, double movt_force, double max_force)
+        # self.pandaAI = AICharacter("panda", self.panda, 100, 1, 5)
+        # self.AIworld.addAiChar(self.pandaAI)
+        # self.pandaAIbehaviors = self.pandaAI.getAiBehaviors()
 
+        # self.pandaAIbehaviors.pursue(self.mainChar)
+        # taskMgr.add(self.movePanda, "movePandaTask")
+
+        ##### Flockers
+        self.flockers = []
+        self.flockersGroundRay = []
+        self.flockersGroundCol = []
+        self.flockersGroundColNp = []
+        self.flockersGroundHandler = []
+        self.AIchar = []
+        self.AIbehaviors = []
+
+        #Flock AI functions
+        self.MyFlock = Flock(1, 270, 10, 2, 4, 0.2)
+        self.AIworld.addFlock(self.MyFlock)
+        self.AIworld.flockOn(1);
+        for i in range(10):
+            self.flockers.append(Actor("models/panda-model",
+                                     {"walk":"models/panda-walk4"}))
+            self.flockers[i].reparentTo(render)
+            self.flockers[i].setScale(0.001)
+            self.flockers[i].setPos(startPos[0],startPos[1]-10,startPos[2])
+            self.flockers[i].loop("walk")
+
+            # Ground Ray
+            self.flockersGroundRay.append(CollisionRay())
+            self.flockersGroundRay[i].setOrigin(0,0,1000)
+            self.flockersGroundRay[i].setDirection(0,0,-1)
+            self.flockersGroundCol.append(CollisionNode('flockerRay%s'%i))
+            self.flockersGroundCol[i].addSolid(self.flockersGroundRay[i])
+            self.flockersGroundCol[i].setFromCollideMask(BitMask32.bit(0))
+            self.flockersGroundCol[i].setIntoCollideMask(BitMask32.allOff())
+            self.flockersGroundColNp.append(self.flockers[i].attachNewNode(self.flockersGroundCol[i]))
+            self.flockersGroundHandler.append(CollisionHandlerQueue())
+            self.cTrav.addCollider(self.flockersGroundColNp[i], self.flockersGroundHandler[i])
+            self.pusher.addCollider(self.flockersGroundColNp[i], self.mainChar)
+
+            self.AIchar.append(AICharacter("flockersAI%s"%i,self.flockers[i], 100, 0.05, 5))
+            self.AIworld.addAiChar(self.AIchar[i])
+            self.AIbehaviors.append(self.AIchar[i].getAiBehaviors())
+            self.MyFlock.addAiChar(self.AIchar[i])
+            self.AIbehaviors[i].flock(0.7)             
+            self.AIbehaviors[i].pursue(self.mainChar, 0.4)
+
+            taskMgr.add(self.moveFlockers, "moveFlockersTask")
+ 
     def createLighting(self):
         ambientLight = AmbientLight("ambientLight")
         ambientLight.setColor(Vec4(.3, .3, .3, 1))
@@ -255,12 +323,15 @@ class World(DirectObject):
         render.setLight(render.attachNewNode(ambientLight))
         render.setLight(render.attachNewNode(directionalLight))
 
+    def AIUpdate(self, task):
+        self.AIworld.update()
+        return Task.cont
+
     def checkGameStage(self, task):
         """
             GUI with time taken and restart button when player reaches end point or reaches zero health.
         """
         # player reach end point
-        print self.play_song.status()
         player_endpoint_distance = self.mainChar.getDistance(self.endPoint)
         if player_endpoint_distance < 4:
             taskMgr.remove('updateHUDTask')
@@ -388,6 +459,42 @@ class World(DirectObject):
         base.camera.lookAt(self.floater)
 
         return task.cont
+
+    # def movePanda(self, task):
+    #     
+    #     startpos = self.panda.getPos()
+    #     
+    #     entries = []
+    #     for i in range(self.pandaGroundHandler.getNumEntries()):
+    #         entry = self.pandaGroundHandler.getEntry(i)
+    #         entries.append(entry)
+    #     entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(),
+    #                                  x.getSurfacePoint(render).getZ()))
+    #     if (len(entries)>0) and (entries[0].getIntoNode().getName() == "terrain"):
+    #         self.panda.setZ(entries[0].getSurfacePoint(render).getZ())
+    #     else:
+    #         self.panda.setPos(startpos)
+    #     
+    #     return task.cont
+
+    def moveFlockers(self, task):
+        
+        for i in range(10):
+            startpos = self.flockers[i].getPos()
+
+            entries = []
+            for j in range(self.flockersGroundHandler[i].getNumEntries()):
+                entry = self.flockersGroundHandler[i].getEntry(j)
+                entries.append(entry)
+            entries.sort(lambda x,y: cmp(y.getSurfacePoint(render).getZ(),
+                                         x.getSurfacePoint(render).getZ()))
+            if (len(entries)>0) and (entries[0].getIntoNode().getName() == "terrain"):
+                self.flockers[i].setZ(entries[0].getSurfacePoint(render).getZ())
+            else:
+                self.flockers[i].setPos(startpos)
+            
+        return task.cont
+
 
 base.w = World()
 run()
