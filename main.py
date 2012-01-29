@@ -27,7 +27,7 @@ class World(DirectObject):
         self.gameStarted = 0
         self.gamePaused = 0
         self.timeLeft = 100
-        self.speed = 4
+        self.speed = 2
         self.obstacle_count = 10
 
         self.keyMap = {"left":0, "right":0, "forward":0, "backward":0, "cam-left":0, "cam-right":0}
@@ -134,6 +134,7 @@ class World(DirectObject):
         self.loadMainCharacter()
         self.loadStartPoint()
         self.loadEndPoint()
+        self.loadEffects()
 
         base.disableMouse()
         base.camera.setPos(self.mainChar.getX(), self.mainChar.getY()+10,2)
@@ -160,6 +161,10 @@ class World(DirectObject):
         # Task Manager to control the game
         taskMgr.add(self.updateGame, "updateGameTask")
         taskMgr.add(self.updateHUD, "updateHUDTask")
+        # taskMgr.add(self.updateEffects, "updateEffectsTask")
+        taskMgr.add(self.updateSpeedPill, "updateSpeedPillTask")
+        taskMgr.add(self.updateHealthPill, "updateHealthPillTask")
+        taskMgr.add(self.updateShieldPill, "updateShieldPillTask")
         taskMgr.add(self.checkGameStage, "checkGameStageTask")
         taskMgr.add(self.AIUpdate, "AIUpdate")
 
@@ -194,9 +199,9 @@ class World(DirectObject):
 
     def loadMainCharacter(self):
         mainCharStartPos = self.environment.find("**/start_point").getPos()
-        self.mainChar = Actor("models/ralph",
-                            {"run" : "models/ralph-run",
-                             "walk": "models/ralph-walk"})
+        self.mainChar = Actor("models/eve/eve",
+                            {"run" : "models/eve/eve-run",
+                             "walk": "models/eve/eve-walk"})
         self.mainChar.reparentTo(render)
         self.mainChar.setScale(.2)
         self.mainChar.setPos(mainCharStartPos)
@@ -210,12 +215,28 @@ class World(DirectObject):
 
     def loadEndPoint(self):
         """
-            chosen end position = Point3(30.9069, 4.36755, 2.91223)
+            chosen end position = point3(30.9069, 4.36755, 2.91223)
         """
         self.end_point = Actor("models/smiley")
         self.end_point.reparentTo(render)
         self.end_point.setScale(.5)
         self.end_point.setPos(30.9069, 4.36755, 3.4)
+
+    def loadEffects(self):
+        self.speed_dog = Actor("models/dog/evilaibodog")
+        self.speed_dog.reparentTo(render)
+        self.speed_dog.setScale(.5)
+        self.speed_dog.setPos(-71.5866, 43.2459, 2.17505)
+
+        self.health_milk = Actor("models/milk/milkbottle")
+        self.health_milk.reparentTo(render)
+        self.health_milk.setScale(3)
+        self.health_milk.setPos(-81.977, -31.9481, 0.155029)
+
+        self.time_plant = Actor("models/plant/shrubbery2")
+        self.time_plant.reparentTo(render)
+        self.time_plant.setScale(.003)
+        self.time_plant.setPos(-75.8541, 3.21947, 6.19539)
 
     def addCollisionOnMainChar(self):
         self.mainCharGroundRay = CollisionRay()
@@ -365,7 +386,33 @@ class World(DirectObject):
             self.health -= 1
         self.health_txt.setText("Health : %s"%self.health)
         return task.cont
-     
+
+    def updateSpeedPill(self, task):
+
+        dis = self.mainChar.getDistance(self.speed_dog)
+        if dis < 2:
+            self.speed_dog.removeNode()
+            self.speed = 4
+            return task.done
+        return task.cont
+
+    def updateHealthPill(self, task):
+
+        dis = self.mainChar.getDistance(self.health_milk)
+        if dis < 2:
+            self.health = 100
+            self.health_milk.removeNode()
+            return task.done
+        return task.cont
+
+    def updateShieldPill(self, task):
+        dis = self.mainChar.getDistance(self.time_plant)
+        if dis < 200:
+            self.time_plant.removeNode()
+            self.total_time += 20
+            return task.done
+        return task.cont
+
     def updateGame(self, task):
 
         # If the camera-left key is pressed, move camera left.
