@@ -12,16 +12,10 @@ from panda3d.ai import *
 from direct.task import Task
 import random, sys, os, math
 
-def addInstructions(pos, msg):
-    return OnscreenText(text=msg, style=1, fg=(1,1,1,1),
-                        pos=(-1.3, pos), align=TextNode.ALeft, scale = .05)
-
-
 class World(DirectObject):
     
     def __init__(self):
         DirectObject.__init__(self)
-        
         base.setBackgroundColor(0,0,0,1)
 
         self.gameStarted = 0
@@ -122,7 +116,6 @@ class World(DirectObject):
         self.play_song.play()
         self.play_song.setLoop(True)
         self.AIworld = AIWorld(render)
-        
         
         # Load Environment and Players
         self.loadEnv()
@@ -350,6 +343,9 @@ class World(DirectObject):
         if player_endpoint_distance < 4:
             taskMgr.remove('updateHUDTask')
             taskMgr.remove('updateGameTask')
+            taskMgr.remove('updateSpeedPill')
+            taskMgr.remove('updateHealthPill')
+            taskMgr.remove('updateShieldPill')
             self.hideHUD()
             self.showRestartPage()
             self.changeSongMode(self.win_song)
@@ -361,6 +357,9 @@ class World(DirectObject):
         if (self.time_left <= 0 or self.health <= 0):
             taskMgr.remove('updateHUDTask')
             taskMgr.remove('updateGameTask')
+            taskMgr.remove('updateSpeedPill')
+            taskMgr.remove('updateHealthPill')
+            taskMgr.remove('updateShieldPill')
             self.hideHUD()
             self.showRestartPage()
             self.changeSongMode(self.gameover_song)
